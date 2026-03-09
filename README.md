@@ -97,7 +97,7 @@ Create 3 new variables. The exact spelling of these variables is important:
 3. _**GPT_MODE**_
   - (default: CHAT)
   - Accepts one of 2 values:
-    - "CHAT" - Chat mode with history, cheaper than prompt mode but also faster. Uses gpt-3.5-turbo as model.
+    - "CHAT" - Chat mode with history, cheaper than prompt mode but also faster. Uses gpt-4o-mini as model.
     - "PROMPT" - Prompt mode, no history. Uses text-davinci-003 as model.
 
 4. _**HISTORY_LENGTH**_
@@ -108,21 +108,40 @@ Create 3 new variables. The exact spelling of these variables is important:
   - This gives ChatGPT the ability to remember things and allow conversations instead of static prompts.
 
 5. _**MODEL_NAME**_
-  - (default: gpt-3.5-turbo)
-  - Accepts one of 2 values:
-    - "gpt-3.5-turbo" - The default model. This is the fastest and cheapest model. It is also the least accurate.
-    - "text-davinci-003" - Most expensive model.
-    - "gpt-4" - Most accurate model and if you have the plan for it!
+  - (default: gpt-4o-mini)
+  - Accepts values such as:
+    - "gpt-4o-mini" - Default model (GPT 4o mini), fast and cost-effective.
+    - "gpt-4o" - More capable 4o model.
+    - "gpt-4" - Previous generation.
+
+6. _**ENABLE_JOIN_CHAT**_
+  - (default: false)
+  - Set to "true" to let the bot read the chat and join the discussion without being tagged.
+  - The bot keeps a buffer of recent messages and may reply with a short message when it fits the conversation.
+  - Use together with JOIN_CHAT_CHANCE and JOIN_CHAT_MIN_INTERVAL_SECONDS to control how often it speaks.
+
+7. _**JOIN_CHAT_CHANCE**_
+  - (default: 15)
+  - When ENABLE_JOIN_CHAT is true: chance (0–100) per non-command message that the bot considers replying.
+  - Higher = more frequent attempts; the model can still respond with [SKIP] to stay silent.
+
+8. _**JOIN_CHAT_MIN_INTERVAL_SECONDS**_
+  - (default: 90)
+  - Minimum seconds between unsolicited bot messages per channel (avoids spam).
+
+9. _**JOIN_CHAT_MAX_RECENT_MESSAGES**_
+  - (default: 15)
+  - Number of recent chat lines sent to the model as context when deciding whether to reply.
 
 6.3. Optional Variables only for Render
 
-6. _**COMMAND_NAME**_
+10. _**COMMAND_NAME**_
   - (default: chat)
   - You can add an exclamation mark (!) before the command name to make look like a twitch command.
   - Accepts a string.
   - Defines the command that will be used to trigger the bot.
 
-7. _**TWITCH_USER**_
+11. _**TWITCH_USER**_
 This step can be complicated.
   - To get the necessary twitch user:
     - Go to https://dev.twitch.tv/console

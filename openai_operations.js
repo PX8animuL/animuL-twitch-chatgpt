@@ -56,6 +56,31 @@ export class OpenAIOperations {
         }
     }
 
+    /**
+     * Single request that does not modify conversation history.
+     * Used for "join chat" replies based on recent chat context.
+     */
+    async make_openai_call_oneshot(systemPrompt, userMessage) {
+        try {
+            const response = await this.openai.chat.completions.create({
+                model: this.model_name,
+                messages: [
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: userMessage },
+                ],
+                temperature: 0.8,
+                max_tokens: 150,
+            });
+            if (response.choices && response.choices[0].message) {
+                return (response.choices[0].message.content || "").trim();
+            }
+            return "";
+        } catch (error) {
+            console.error("OpenAI oneshot error:", error);
+            return "";
+        }
+    }
+
     async make_openai_call_completion(text) {
         try {
             const response = await this.openai.completions.create({

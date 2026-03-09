@@ -24,7 +24,7 @@ app.set('view engine', 'ejs');
 let GPT_MODE = process.env.GPT_MODE // CHAT or PROMPT
 let HISTORY_LENGTH = process.env.HISTORY_LENGTH // number of messages to keep in history
 let OPENAI_API_KEY = process.env.OPENAI_API_KEY // openai api key
-let MODEL_NAME = process.env.MODEL_NAME // openai model name (e.g. gpt-3, gpt-3.5-turbo, gpt-4)
+let MODEL_NAME = process.env.MODEL_NAME // openai model name (e.g. gpt-4o-mini, gpt-4)
 let TWITCH_USER = process.env.TWITCH_USER // twitch bot username
 let TWITCH_AUTH =  process.env.TWITCH_AUTH // tmi auth token
 let COMMAND_NAME = process.env.COMMAND_NAME // comma separated list of commands to trigger bot (e.g. !gpt, !chat)
@@ -32,6 +32,10 @@ let CHANNELS = process.env.CHANNELS // comma separated list of channels to join
 let SEND_USERNAME = process.env.SEND_USERNAME // send username in message to openai
 let ENABLE_TTS = process.env.ENABLE_TTS // enable text to speech
 let ENABLE_CHANNEL_POINTS = process.env.ENABLE_CHANNEL_POINTS; // enable channel points
+let ENABLE_JOIN_CHAT = process.env.ENABLE_JOIN_CHAT // bot joins discussion without being tagged
+let JOIN_CHAT_CHANCE = process.env.JOIN_CHAT_CHANCE // 0-100, chance to consider replying per message
+let JOIN_CHAT_MIN_INTERVAL_SECONDS = process.env.JOIN_CHAT_MIN_INTERVAL_SECONDS
+let JOIN_CHAT_MAX_RECENT_MESSAGES = process.env.JOIN_CHAT_MAX_RECENT_MESSAGES
 
 if (!GPT_MODE) {
     GPT_MODE = "CHAT"
@@ -43,7 +47,7 @@ if (!OPENAI_API_KEY) {
     console.log("No OPENAI_API_KEY found. Please set it as environment variable.")
 }
 if (!MODEL_NAME) {
-    MODEL_NAME = "gpt-3.5-turbo"
+    MODEL_NAME = "gpt-4o-mini"
 }
 if (!TWITCH_USER) {
     TWITCH_USER = "oSetinhasBot"
@@ -77,11 +81,75 @@ if (!ENABLE_TTS) {
 if (!ENABLE_CHANNEL_POINTS) {
     ENABLE_CHANNEL_POINTS = "false";
 }
+if (!ENABLE_JOIN_CHAT) {
+    ENABLE_JOIN_CHAT = "false";
+}
+if (!JOIN_CHAT_CHANCE) {
+    JOIN_CHAT_CHANCE = "15";
+}
+if (!JOIN_CHAT_MIN_INTERVAL_SECONDS) {
+    JOIN_CHAT_MIN_INTERVAL_SECONDS = "90";
+}
+if (!JOIN_CHAT_MAX_RECENT_MESSAGES) {
+    JOIN_CHAT_MAX_RECENT_MESSAGES = "15";
+}
 
 // init global variables
 const MAX_LENGTH = 399
 let file_context = "You are a helpful Twitch Chatbot."
 let last_user_message = ""
+
+// Join chat: recent messages per channel (no command messages)
+const recentChatByChannel = {};
+const lastJoinTimeByChannel = {};
+const JOIN_CHAT_SKIP = "[SKIP]";
+
+function isCommandMessage(msg) {
+    const m = (msg || "").toLowerCase().trim();
+    return COMMAND_NAME.some(cmd => m.startsWith(cmd.toLowerCase()));
+}
+
+function pushRecentChat(channel, username, text) {
+    if (!recentChatByChannel[channel]) recentChatByChannel[channel] = [];
+    const max = parseInt(JOIN_CHAT_MAX_RECENT_MESSAGES, 10) || 15;
+    recentChatByChannel[channel].push({ username, text });
+    if (recentChatByChannel[channel].length > max) {
+        recentChatByChannel[channel].shift();
+    }
+}
+
+function canJoinChat(channel) {
+    if (ENABLE_JOIN_CHAT !== "true") return false;
+    const last = lastJoinTimeByChannel[channel] || 0;
+    const intervalSec = parseInt(JOIN_CHAT_MIN_INTERVAL_SECONDS, 10) || 90;
+    return (Date.now() - last) / 1000 >= intervalSec;
+}
+
+function tryJoinChat(channel, user, message) {
+    if (!canJoinChat(channel)) return;
+    const chance = parseInt(JOIN_CHAT_CHANCE, 10) || 15;
+    if (chance <= 0 || Math.random() * 100 > chance) return;
+
+    const recent = recentChatByChannel[channel];
+    if (!recent || recent.length < 2) return;
+
+    const systemPrompt = file_context + "\n\nYou are in a Twitch chat. You see the recent messages above. Reply with ONE short twitch chat message (no commands, no !). Keep it casual and brief. If you have nothing relevant or fun to add, reply with exactly: " + JOIN_CHAT_SKIP;
+    const chatLines = recent.map(({ username, text }) => `${username}: ${text}`).join("\n");
+    const userPrompt = "Recent chat:\n" + chatLines + "\n\nYour brief reply (or " + JOIN_CHAT_SKIP + " to stay silent):";
+
+    (async () => {
+        try {
+            const reply = await openai_ops.make_openai_call_oneshot(systemPrompt, userPrompt);
+            if (!reply || reply.toUpperCase() === JOIN_CHAT_SKIP.toUpperCase()) return;
+            const toSend = reply.length > MAX_LENGTH ? reply.slice(0, MAX_LENGTH - 3) + "..." : reply;
+            if (!toSend.trim()) return;
+            lastJoinTimeByChannel[channel] = Date.now();
+            bot.say(channel, toSend);
+        } catch (e) {
+            console.error("Join chat error:", e);
+        }
+    })();
+}
 
 // setup twitch bot
 const channels = CHANNELS;
@@ -122,6 +190,12 @@ bot.connect(
 
 bot.onMessage(async (channel, user, message, self) => {
     if (self) return;
+
+    // Track recent chat and optionally join discussion without being tagged
+    if (!isCommandMessage(message)) {
+        pushRecentChat(channel, user.username, message);
+        tryJoinChat(channel, user, message);
+    }
 
     if (ENABLE_CHANNEL_POINTS) {
         console.log(`The message id is ${user["msg-id"]}`);

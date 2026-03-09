@@ -16,7 +16,7 @@ services:
       - key: HISTORY_LENGTH
         value: "3"
       - key: MODEL_NAME
-        value: "gpt-3.5-turbo"
+        value: "gpt-4o-mini"
       - key: COMMAND_NAME
         value: "chat"
       - key: TWITCH_USER  # https://dev.twitch.tv/console
@@ -29,3 +29,11 @@ services:
         value: "false"
       - key: ENABLE_CHANNEL_POINTS
         value: "false"
+      - key: ENABLE_JOIN_CHAT
+        value: "false"
+      - key: JOIN_CHAT_CHANCE
+        value: "15"
+      - key: JOIN_CHAT_MIN_INTERVAL_SECONDS
+        value: "90"
+      - key: JOIN_CHAT_MAX_RECENT_MESSAGES
+        value: "15"
